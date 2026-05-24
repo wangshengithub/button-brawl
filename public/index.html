@@ -1,0 +1,583 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>按钮大乱斗</title>
+<style>
+*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+:root {
+  --bg: #0a0a0f;
+  --card: rgba(200,30,30,0.06);
+  --card-border: rgba(200,30,30,0.12);
+  --text: #f0e6d3;
+  --text2: rgba(240,230,211,0.55);
+  --text3: rgba(240,230,211,0.3);
+  --red: #cc1a1a;
+  --red-bright: #ff2d2d;
+  --red-dim: rgba(204,26,26,0.2);
+  --gold: #d4a843;
+  --gold-bright: #ffd666;
+  --green: #4caf50;
+  --frenzy: #ff2d2d;
+}
+
+html, body {
+  width: 100%; height: 100%; overflow: hidden;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  background: var(--bg); color: var(--text); touch-action: manipulation;
+}
+@media (prefers-reduced-motion: reduce) { *,*::before,*::after{animation-duration:0.01ms!important;transition-duration:0.01ms!important;} }
+
+#particles { position: fixed; inset: 0; z-index: 0; pointer-events: none; }
+#app { position: relative; z-index: 1; width: 100%; height: 100%; }
+.screen { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; transition: opacity .35s, transform .35s; }
+.hidden { display: none !important; }
+.screen.hidden { display: flex !important; opacity: 0; pointer-events: none; transform: scale(0.96); }
+
+/* ===== 加入页 ===== */
+.logo { font-size: clamp(40px,10vw,64px); font-weight: 900; background: linear-gradient(135deg,var(--red-bright),var(--gold-bright),var(--red-bright)); background-size: 200% 200%; -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; animation: grad 3s ease infinite; filter: drop-shadow(0 0 40px rgba(204,26,26,0.3)); user-select: none; letter-spacing: -1px; }
+@keyframes grad{0%{background-position:0% 50%}50%{background-position:100% 50%}100%{background-position:0% 50%}}
+.subtitle { color: var(--text3); font-size: 15px; margin-top: -8px; }
+.join-box { display: flex; flex-direction: column; align-items: center; gap: 14px; width: 100%; max-width: 340px; padding: 0 20px; margin-top: 28px; }
+.join-box input[type="text"] { width: 100%; padding: 15px 20px; border: 2px solid var(--card-border); border-radius: 4px; background: var(--card); color: var(--text); font-size: 16px; outline: none; transition: .3s; }
+.join-box input[type="text"]:focus { border-color: var(--red); box-shadow: 0 0 20px rgba(204,26,26,0.15); }
+.join-box input::placeholder { color: var(--text3); }
+.btn-join { width: 100%; padding: 15px; border: 2px solid var(--red); border-radius: 4px; background: linear-gradient(135deg,var(--red),#e03030); color: #fff; font-size: 17px; font-weight: 700; cursor: pointer; letter-spacing: 1px; box-shadow: 0 4px 0 #8a1010,0 8px 24px rgba(204,26,26,0.3); transition: .15s; }
+.btn-join:hover { transform: translateY(-2px); box-shadow: 0 6px 0 #8a1010,0 10px 32px rgba(204,26,26,0.45); }
+.btn-join:active { transform: translateY(2px); box-shadow: 0 2px 0 #8a1010; }
+.btn-join:disabled { opacity: .5; cursor: not-allowed; transform: none; }
+
+/* ===== 等待页 ===== */
+.waiting-icon { font-size: 64px; animation: bounce 1s ease infinite; }
+@keyframes bounce{0%,100%{transform:translateY(0)}50%{transform:translateY(-12px)}}
+.waiting-text { font-size: 22px; font-weight: 600; margin-top: 12px; }
+.waiting-count { font-size: 52px; font-weight: 900; color: var(--gold); margin-top: 8px; }
+.waiting-countdown { font-size: 72px; font-weight: 900; color: var(--red-bright); margin-top: 4px; animation: pulse 1s ease-in-out infinite; }
+@keyframes pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.08)}}
+.waiting-hint { font-size: 13px; color: var(--text3); margin-top: 4px; }
+.wait-player-list { margin-top: 20px; display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; max-width: 400px; padding: 0 20px; }
+.wait-player-tag { padding: 6px 14px; border-radius: 4px; background: var(--card); border: 1px solid var(--card-border); font-size: 14px; font-weight: 600; animation: fadeInTag .3s ease; }
+.wait-player-tag.me { border-color: var(--gold); background: rgba(212,168,67,0.12); color: var(--gold); }
+@keyframes fadeInTag{from{opacity:0;transform:scale(0.8)}to{opacity:1;transform:scale(1)}}
+
+/* ===== 游戏页 ===== */
+#game-screen { justify-content: flex-start; align-items: stretch; padding: 12px 16px; gap: 0; flex-direction: row; }
+
+/* 左侧：游戏主区域 */
+.game-left {
+  flex: 1; display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  gap: 10px; min-width: 0; padding: 8px;
+}
+
+.stage-title { width: 100%; text-align: center; font-size: 26px; font-weight: 900; letter-spacing: 3px; padding: 6px 0 2px; transition: all .3s; }
+.stage-title.normal-mode { color: var(--text2); }
+.stage-title.frenzy-mode { color: var(--frenzy); animation: blink .4s ease-in-out infinite alternate; text-shadow: 0 0 20px rgba(255,45,45,0.5); }
+@keyframes blink{from{opacity:.6}to{opacity:1}}
+
+.top-bar { width: 100%; max-width: 500px; display: flex; justify-content: space-between; align-items: center; padding: 8px 16px; background: var(--card); border: 1px solid var(--card-border); border-radius: 4px; backdrop-filter: blur(12px); }
+.timer-box { display: flex; align-items: center; gap: 8px; }
+.timer-icon { font-size: 18px; }
+.timer-val { font-size: 24px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.timer-val.frenzy { color: var(--frenzy); animation: blink .4s ease-in-out infinite alternate; }
+.my-score { font-size: 17px; font-weight: 700; color: var(--gold); transition: transform .15s; }
+
+.btn-zone { flex: 1; display: flex; justify-content: center; align-items: center; width: 100%; }
+.game-btn {
+  width: clamp(180px,36vmin,300px); height: clamp(180px,36vmin,300px);
+  border: 3px solid rgba(255,255,255,0.1); border-radius: 4px;
+  background: linear-gradient(135deg,#cc1a1a,#e03030); color: #fff;
+  font-weight: 900; cursor: pointer;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px;
+  position: relative; overflow: hidden;
+  user-select: none; -webkit-user-select: none; touch-action: manipulation;
+  transition: transform .1s, box-shadow .1s;
+  box-shadow: 0 4px 0 #8a1010,0 8px 32px rgba(204,26,26,0.3);
+}
+.game-btn:hover { transform: translateY(-2px); box-shadow: 0 6px 0 #8a1010,0 12px 36px rgba(204,26,26,0.4); }
+.game-btn:active { transform: translateY(2px); box-shadow: 0 2px 0 #8a1010,0 4px 16px rgba(204,26,26,0.2); }
+.game-btn .icon { font-size: clamp(36px,7vmin,56px); line-height: 1; }
+.game-btn .label { font-size: clamp(16px,3.5vmin,26px); letter-spacing: 2px; }
+.game-btn .sub { font-size: clamp(11px,2vmin,15px); opacity: .7; font-weight: 700; letter-spacing: 1px; }
+
+/* 观战面板 */
+.spectator-zone { flex: 1; display: flex; justify-content: center; align-items: center; width: 100%; }
+.spectator-panel {
+  width: clamp(200px,40vmin,320px); padding: 32px 24px;
+  border: 2px dashed var(--card-border); border-radius: 4px;
+  background: var(--card); text-align: center;
+  display: flex; flex-direction: column; align-items: center; gap: 12px;
+}
+.spectator-icon { font-size: 48px; opacity: .5; }
+.spectator-text { font-size: 20px; font-weight: 800; color: var(--text2); }
+.spectator-sub { font-size: 14px; color: var(--text3); }
+
+/* 右侧：排行榜侧栏 */
+.game-right {
+  width: 240px; min-width: 200px;
+  display: flex; flex-direction: column;
+  padding: 8px 8px 8px 0;
+  gap: 8px;
+}
+
+.leaderboard { flex: 1; background: var(--card); border: 1px solid var(--card-border); border-radius: 4px; padding: 12px 14px; backdrop-filter: blur(12px); overflow-y: auto; }
+.lb-title { font-size: 13px; font-weight: 900; color: var(--gold); text-transform: uppercase; letter-spacing: 2px; margin-bottom: 10px; padding-bottom: 6px; border-bottom: 1px solid var(--card-border); }
+.lb-list { list-style: none; }
+.lb-row { display: flex; align-items: center; padding: 8px 10px; border-radius: 2px; margin-bottom: 3px; transition: .25s; }
+.lb-row.me { background: var(--red-dim); border-left: 3px solid var(--gold); }
+.lb-rank { min-width: 28px; font-size: 15px; font-weight: 900; color: var(--text3); }
+.lb-rank.r1 { color: var(--gold-bright); font-size: 18px; }
+.lb-rank.r2 { color: #c0c0c0; }
+.lb-rank.r3 { color: #cd7f32; }
+.lb-name { flex: 1; font-size: 14px; font-weight: 600; margin-left: 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lb-score { font-size: 16px; font-weight: 900; color: var(--gold); font-variant-numeric: tabular-nums; min-width: 36px; text-align: right; }
+
+/* ===== 结束页 ===== */
+.over-title { font-size: clamp(36px,9vw,56px); font-weight: 900; background: linear-gradient(135deg,var(--red-bright),var(--gold-bright)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
+.over-crown { font-size: 72px; animation: bounce 1s ease infinite; }
+.over-rank { font-size: 18px; color: var(--text2); margin-top: 8px; }
+.over-rank b { font-size: 44px; color: var(--gold); }
+.over-score { font-size: 15px; color: var(--text2); margin-top: 4px; }
+.over-score b { color: var(--text); }
+.over-lb { width: 100%; max-width: 380px; margin-top: 16px; }
+.over-hint { font-size: 14px; color: var(--gold); margin-top: 14px; animation: pulse 1.5s ease-in-out infinite; }
+
+/* ===== 浮动分数 ===== */
+.float-score { position: fixed; pointer-events: none; font-size: 26px; font-weight: 900; z-index: 500; animation: floatUp .75s ease-out forwards; }
+.float-score.pos { color: var(--green); }
+.float-score.neg { color: var(--frenzy); }
+@keyframes floatUp{0%{opacity:1;transform:translateY(0) scale(1)}100%{opacity:0;transform:translateY(-70px) scale(1.4)}}
+
+/* ===== 右上角事件通知 ===== */
+.notify-wrap { position: fixed; top: 16px; right: 16px; z-index: 600; display: flex; flex-direction: column; gap: 6px; max-width: 300px; }
+.notify-item { padding: 10px 16px; border-radius: 4px; font-size: 13px; font-weight: 600; color: #fff; backdrop-filter: blur(8px); border-left: 3px solid; animation: slideInN .25s ease-out; transition: opacity .25s, transform .25s; }
+.notify-item.notify-gold { background: rgba(212,168,67,0.15); border-left-color: var(--gold-bright); color: var(--gold-bright); }
+.notify-item.notify-purple { background: rgba(160,60,220,0.15); border-left-color: #c070ff; color: #d0a0ff; }
+.notify-item.notify-quote { background: rgba(255,160,60,0.1); border-left-color: #ff9030; color: #ffaa55; font-style: italic; }
+@keyframes slideInN{from{opacity:0;transform:translateX(60px)}to{opacity:1;transform:translateX(0)}}
+
+/* ===== Toast ===== */
+.toast-wrap { position: fixed; bottom: 16px; right: 16px; z-index: 600; display: flex; flex-direction: column; gap: 6px; max-width: 280px; }
+.toast { padding: 10px 18px; border-radius: 4px; font-size: 13px; font-weight: 600; color: #fff; animation: slideR .25s ease-out; backdrop-filter: blur(8px); transition: opacity .25s, transform .25s; }
+.toast-info { background: rgba(212,168,67,0.9); }
+.toast-success { background: rgba(76,175,80,0.9); }
+.toast-warn { background: rgba(204,26,26,0.9); }
+.toast-error { background: rgba(180,20,20,0.9); }
+@keyframes slideR{from{opacity:0;transform:translateX(60px)}to{opacity:1;transform:translateX(0)}}
+
+.shake { animation: shake .3s ease-in-out; }
+@keyframes shake{0%,100%{transform:translateX(0)}25%{transform:translateX(-4px)}75%{transform:translateX(4px)}}
+.ripple { position: absolute; border-radius: 50%; background: rgba(255,255,255,0.3); transform: scale(0); animation: rippleAnim .5s ease-out; pointer-events: none; }
+@keyframes rippleAnim{to{transform:scale(3);opacity:0}}
+@media(max-width:700px){
+  #game-screen{flex-direction:column;}
+  .game-right{width:100%;min-width:0;padding:0;}
+  .leaderboard{max-height:140px;}
+  .top-bar{padding:8px 12px} .timer-val{font-size:22px} .stage-title{font-size:22px}
+  .spectator-panel{padding:20px 16px;} .spectator-icon{font-size:36px;}
+}
+.site-footer { position: fixed; bottom: 0; left: 0; right: 0; text-align: center; padding: 6px 0; font-size: 12px; color: var(--text3); z-index: 10; pointer-events: none; user-select: none; }
+.site-footer a { color: var(--text3); text-decoration: none; pointer-events: auto; transition: color .2s; }
+.site-footer a:hover { color: var(--gold); }
+</style>
+</head>
+<body>
+<canvas id="particles"></canvas>
+<div id="app">
+  <div id="join-screen" class="screen">
+    <div class="logo">按钮大乱斗</div>
+    <div class="subtitle">局域网多人疯狂点击对决</div>
+    <div class="join-box">
+      <input id="name-input" type="text" placeholder="输入你的昵称" maxlength="12" autocomplete="off">
+      <button class="btn-join" id="btn-join">加入战斗</button>
+    </div>
+  </div>
+  <div id="wait-screen" class="screen hidden">
+    <div class="waiting-icon">🎮</div>
+    <div class="waiting-text" id="wait-text">等待玩家加入...</div>
+    <div class="waiting-countdown hidden" id="wait-countdown">15</div>
+    <div class="waiting-count hidden" id="wait-count">0</div>
+    <div class="waiting-hint" id="wait-hint">需要至少 2 名玩家才能开始</div>
+    <div class="wait-player-list" id="wait-players"></div>
+  </div>
+  <div id="game-screen" class="screen hidden">
+    <div class="game-left">
+      <div class="stage-title normal-mode" id="stage-title">正常模式</div>
+      <div class="top-bar">
+        <div class="timer-box"><span class="timer-icon">⏱</span><span class="timer-val" id="timer">3:00</span></div>
+        <span class="my-score" id="my-score">0 分</span>
+      </div>
+      <div class="btn-zone" id="btn-zone">
+        <button class="game-btn" id="btn-main">
+          <span class="icon" id="btn-icon">🐟</span>
+          <span class="label" id="btn-label">摸鱼！</span>
+          <span class="sub" id="btn-sub">+1</span>
+        </button>
+      </div>
+      <div class="spectator-zone hidden" id="spectator-zone">
+        <div class="spectator-panel">
+          <div class="spectator-icon">👀</div>
+          <div class="spectator-text">观战中</div>
+          <div class="spectator-sub" id="spectator-sub">等待下一轮开始...</div>
+        </div>
+      </div>
+    </div>
+    <div class="game-right">
+      <div class="leaderboard">
+        <div class="lb-title">🏆 排行榜</div>
+        <ul class="lb-list" id="lb-list"></ul>
+      </div>
+    </div>
+  </div>
+  <div id="over-screen" class="screen hidden">
+    <div class="over-crown" id="over-crown">🏆</div>
+    <div class="over-title">游戏结束</div>
+    <div class="over-rank" id="over-rank"></div>
+    <div class="over-score" id="over-score"></div>
+    <div class="over-lb"><div class="leaderboard"><div class="lb-title">最终排名</div><ul class="lb-list" id="over-lb-list"></ul></div></div>
+    <div class="over-hint" id="over-hint">下一轮即将自动开始...</div>
+  </div>
+</div>
+<div class="notify-wrap" id="notify-wrap"></div>
+<div class="toast-wrap" id="toast-wrap"></div>
+<div class="site-footer">Made by <a href="https://github.com/wangshengithub" target="_blank" rel="noopener">wangshengithub</a></div>
+
+<script>
+/* ==================== 粒子背景 ==================== */
+(function(){
+  var canvas=document.getElementById('particles'),ctx=canvas.getContext('2d'),W,H,particles=[],animating=true;
+  function resize(){W=canvas.width=window.innerWidth;H=canvas.height=window.innerHeight;}
+  resize(); window.addEventListener('resize',resize);
+  document.addEventListener('visibilitychange',function(){animating=!document.hidden;});
+  for(var i=0;i<45;i++) particles.push({x:Math.random()*(W||800),y:Math.random()*(H||600),r:Math.random()*1.8+0.4,dx:(Math.random()-0.5)*0.35,dy:(Math.random()-0.5)*0.35,o:Math.random()*0.3+0.08});
+  var LSQ=110*110;
+  function draw(){requestAnimationFrame(draw);if(!animating)return;ctx.clearRect(0,0,W,H);
+    for(var i=0;i<particles.length;i++){var p=particles[i];p.x+=p.dx;p.y+=p.dy;if(p.x<0)p.x=W;if(p.x>W)p.x=0;if(p.y<0)p.y=H;if(p.y>H)p.y=0;ctx.beginPath();ctx.arc(p.x,p.y,p.r,0,Math.PI*2);ctx.fillStyle='rgba(204,26,26,'+p.o+')';ctx.fill();}
+    for(i=0;i<particles.length;i++){for(var j=i+1;j<particles.length;j++){var dx=particles[i].x-particles[j].x,dy=particles[i].y-particles[j].y,dsq=dx*dx+dy*dy;if(dsq<LSQ){ctx.beginPath();ctx.moveTo(particles[i].x,particles[i].y);ctx.lineTo(particles[j].x,particles[j].y);ctx.strokeStyle='rgba(204,26,26,'+(0.06*(1-Math.sqrt(dsq)/110))+')';ctx.stroke();}}}
+  }draw();
+})();
+
+/* ==================== 音效 ==================== */
+var AudioCtx=window.AudioContext||window.webkitAudioContext,audioCtx=null;
+function ensureAudio(){if(!audioCtx)try{audioCtx=new AudioCtx();}catch(e){}}
+function playTone(f,d,t,v){try{ensureAudio();if(!audioCtx)return;var o=audioCtx.createOscillator(),g=audioCtx.createGain();o.type=t||'sine';o.frequency.value=f;g.gain.setValueAtTime(v||0.12,audioCtx.currentTime);g.gain.exponentialRampToValueAtTime(0.001,audioCtx.currentTime+d);o.connect(g);g.connect(audioCtx.destination);o.start();o.stop(audioCtx.currentTime+d);}catch(e){}}
+function sfxClick(){playTone(600,0.08,'square',0.08);}
+function sfxSpecial(){playTone(880,0.15,'sine',0.12);}
+function sfxTrap(){playTone(200,0.2,'sawtooth',0.1);}
+function sfxSwap(){playTone(440,0.1,'triangle',0.1);setTimeout(function(){playTone(660,0.1,'triangle',0.1);},100);}
+function sfxFrenzy(){playTone(1000,0.3,'sawtooth',0.12);}
+function sfxGameOver(){playTone(523,0.15,'sine',0.12);setTimeout(function(){playTone(659,0.15,'sine',0.12);},150);setTimeout(function(){playTone(784,0.3,'sine',0.12);},300);}
+
+/* ==================== Toast（底部，系统消息） ==================== */
+function toast(msg,type){
+  var wrap=document.getElementById('toast-wrap');
+  while(wrap.children.length>=5)wrap.removeChild(wrap.firstChild);
+  var el=document.createElement('div');el.className='toast toast-'+(type||'info');el.textContent=msg;wrap.appendChild(el);
+  setTimeout(function(){el.style.opacity='0';el.style.transform='translateX(60px)';},2500);
+  setTimeout(function(){if(el.parentNode)el.remove();},2800);
+}
+
+/* ==================== Notify（右上角，事件通知） ==================== */
+function notify(html, cls){
+  var wrap=document.getElementById('notify-wrap');
+  while(wrap.children.length>=6)wrap.removeChild(wrap.firstChild);
+  var el=document.createElement('div');el.className='notify-item '+(cls||'notify-gold');el.innerHTML=html;wrap.appendChild(el);
+  setTimeout(function(){el.style.opacity='0';el.style.transform='translateX(60px)';},3000);
+  setTimeout(function(){if(el.parentNode)el.remove();},3300);
+}
+
+/* ==================== DOM ==================== */
+var $joinScreen=document.getElementById('join-screen'),$waitScreen=document.getElementById('wait-screen'),
+    $gameScreen=document.getElementById('game-screen'),$overScreen=document.getElementById('over-screen'),
+    $nameInput=document.getElementById('name-input'),$btnJoin=document.getElementById('btn-join'),
+    $waitText=document.getElementById('wait-text'),$waitCount=document.getElementById('wait-count'),
+    $waitCountdown=document.getElementById('wait-countdown'),$waitHint=document.getElementById('wait-hint'),
+    $waitPlayers=document.getElementById('wait-players'),
+    $timer=document.getElementById('timer'),$stageTitle=document.getElementById('stage-title'),
+    $myScore=document.getElementById('my-score'),$btnMain=document.getElementById('btn-main'),
+    $btnIcon=document.getElementById('btn-icon'),$btnLabel=document.getElementById('btn-label'),
+    $btnSub=document.getElementById('btn-sub'),$lbList=document.getElementById('lb-list'),
+    $btnZone=document.getElementById('btn-zone'),$spectatorZone=document.getElementById('spectator-zone'),
+    $spectatorSub=document.getElementById('spectator-sub'),
+    $overCrown=document.getElementById('over-crown'),$overRank=document.getElementById('over-rank'),
+    $overScore=document.getElementById('over-score'),$overLbList=document.getElementById('over-lb-list'),
+    $overHint=document.getElementById('over-hint');
+
+/* ==================== 状态 ==================== */
+var ws=null,myId=null,myName='',prevState=null;
+var lastNormalClick=0,lastSpecialClick=0;
+var currentEventKey=null;
+var myClickedEventKey=null;
+var reconnectAttempts=0,MAX_RECONNECT=5;
+
+var FUNNY_QUOTES=[
+  "作业写完了吗就摸鱼？","摸鱼一时爽，一直摸鱼一直爽","班主任正在赶来的路上",
+  "这手速，写作业怎么没这么快？","食堂抢饭都没这么积极","连点这么快，是怕老师发现吗？",
+  "比考试涂答题卡还快","体育课都没这么积极","前方高能，请保持手速",
+  "你的手指在跳绳吗？","传说中的一阳指重现江湖","点击速度堪比双十一抢购",
+  "再快点，手指要冒烟了","这操作，满分十分我给零分","听说第一名免作业（假的）",
+  "你的手速能去打电竞了","语文老师说作文也要写这么长","数学老师：概率是均等的",
+  "温馨提示：明天交作业","手速再快也快不过放假","这是上课还是网吧？",
+  "你的手指比脑子转得还快","摸鱼有风险，点击需谨慎","这么能点，帮老师批改卷子吧",
+  "下课铃声是最好的BGM","你的手速震惊了整个办公室","老师说这节课自习（才怪）",
+  "论摸鱼，你是专业的","你的同桌已经超过你了","这手速要是用在背单词上就好了",
+  "点击的声音老师已经听到了","按这么快，屏幕要被戳穿了","这种手速，干饭肯定第一名",
+  "你在摸鱼这件事上从未让人失望","语文老师让你写一篇关于摸鱼的作文","英语老师说这叫 fishing in class",
+  "历史老师说摸鱼古已有之","物理老师说你的点击不符合匀速直线运动","化学老师说你的手速引起了化学反应",
+  "你的手指已经练成了肌肉记忆","据说冠军有神秘奖励（并没有）","你的手速让键盘瑟瑟发抖",
+  "点击是一种艺术，你已经是艺术家了","分数就像成绩，时高时低","别慌，你只是暂时落后（大概）",
+  "你的手指刚度刚好可以弹钢琴","月考成绩要有这一半好就好了","手速快的人运气都不会太差",
+  "据说连点一万次可以召唤神龙","你的屏幕：我承受了这个年纪不该承受的压力"
+];
+var SUPER_MSGS=[
+  function(n){return '<b>'+n+'</b> 天降好运，白嫖 +2'},
+  function(n){return '<b>'+n+'</b> 触发超级摸鱼！老师没看见'},
+  function(n){return '<b>'+n+'</b> 点到金色按钮！欧皇附体'},
+  function(n){return '<b>'+n+'</b> 一发入魂，+2 到手'},
+  function(n){return '<b>'+n+'</b> 运气好到离谱，+2 拿走'},
+  function(n){return '<b>'+n+'</b> 这手气，去买彩票吧'}
+];
+var SWAP_MSGS=[
+  function(a,b){return '<b>'+a+'</b> 和 <b>'+b+'</b> 灵魂互换了！'},
+  function(a,b){return '<b>'+a+'</b> 和 <b>'+b+'</b> 达成秘密交易'},
+  function(a,b){return '<b>'+a+'</b> 抢了 <b>'+b+'</b> 的分数！'},
+  function(a,b){return '<b>'+a+'</b> 和 <b>'+b+'</b> 互相伤害'},
+  function(a,b){return '<b>'+a+'</b> 一波操作，<b>'+b+'</b> 捂脸哭'},
+  function(a,b){return '<b>'+b+'</b>：我分数呢？<b>'+a+'</b>：嘿嘿'}
+];
+function pickRand(arr){return arr[Math.floor(Math.random()*arr.length)];}
+
+function getServerAddr(){return(location.hostname||'localhost')+':'+(location.port||'5000');}
+var CONNECT_ADDR=getServerAddr();
+
+function showScreen(name){
+  [$joinScreen,$waitScreen,$gameScreen,$overScreen].forEach(function(el){el.classList.add('hidden');});
+  ({join:$joinScreen,wait:$waitScreen,game:$gameScreen,over:$overScreen})[name].classList.remove('hidden');
+}
+
+/* ==================== WebSocket ==================== */
+function connect(){
+  var addr=getServerAddr();CONNECT_ADDR=addr;
+  var proto=location.protocol==='https:'?'wss://':'ws://';
+  if(ws)try{ws.close();}catch(e){}
+  ws=new WebSocket(proto+addr);
+  ws.onopen=function(){reconnectAttempts=0;ws.send(JSON.stringify({type:'join',name:$nameInput.value.trim()||'无名氏'}));};
+  ws.onmessage=function(e){try{handleMsg(JSON.parse(e.data));}catch(err){console.error('消息解析错误',err);}};
+  ws.onclose=function(){if(reconnectAttempts<MAX_RECONNECT){reconnectAttempts++;toast('连接断开，第 '+reconnectAttempts+' 次重连...','warn');setTimeout(connect,2000*reconnectAttempts);}else{toast('无法连接服务器，请刷新页面','error');showScreen('join');}};
+  ws.onerror=function(){};
+}
+
+function handleMsg(msg){
+  switch(msg.type){
+    case 'welcome': if(msg.state)updateUI(msg.state,msg.playerId); break;
+    case 'joined': myId=msg.playerId;toast(msg.spectator?'加入等待池（观战中）':'加入成功！','success');break;
+    case 'state': if(msg.myId)myId=msg.myId;updateUI(msg.state,msg.myId);break;
+    case 'gameover': if(msg.state)updateUI(msg.state,myId);showGameOver(msg.ranking);break;
+    case 'event-notify':
+      if(msg.notify==='super'){
+        notify(pickRand(SUPER_MSGS)(escHtml(msg.name)),'notify-gold');
+      }else if(msg.notify==='swap'){
+        notify(pickRand(SWAP_MSGS)(escHtml(msg.name1),escHtml(msg.name2)),'notify-purple');
+      }
+      break;
+    case 'error': toast(msg.message||'出错了','error');break;
+  }
+}
+
+/* ==================== UI更新 ==================== */
+function updateUI(state,pid){
+  if(!state)return;if(pid)myId=pid;
+  var prev=prevState;prevState=state;
+  switch(state.stage){
+    case 'waiting':
+      showScreen('wait');
+      updateWaitScreen(state);
+      break;
+    case 'normal':case 'frenzy':
+      if(state.inPool){
+        showScreen('game');
+        updateSpectatorView(state);
+      }else{
+        showScreen('game');
+        updateStageTitle(state);updateTopBar(state);updateMainButton(state);updateLeaderboard(state);
+        $btnZone.classList.remove('hidden');
+        $spectatorZone.classList.add('hidden');
+      }
+      if(prev&&prev.stage==='normal'&&state.stage==='frenzy'){sfxFrenzy();toast('⚡ 狂暴模式开启！⚡','warn');document.body.classList.add('shake');setTimeout(function(){document.body.classList.remove('shake');},400);}
+      break;
+    case 'over':showScreen('over');break;
+  }
+}
+
+function updateStageTitle(s){$stageTitle.textContent=s.stage==='frenzy'?'⚡ 狂暴模式 ⚡':'正常模式';$stageTitle.className='stage-title '+(s.stage==='frenzy'?'frenzy-mode':'normal-mode');}
+
+function updateWaitScreen(state){
+  var pool=state.pool||{};
+  var count=Object.keys(pool).length;
+  $waitCount.textContent=count;
+  $waitPlayers.innerHTML='';
+
+  Object.keys(pool).forEach(function(id){
+    var tag=document.createElement('div');
+    tag.className='wait-player-tag'+(id===myId?' me':'');
+    tag.textContent=pool[id].name+(id===myId?' (我)':'');
+    $waitPlayers.appendChild(tag);
+  });
+
+  if(state.countdown>0){
+    $waitCountdown.textContent=state.countdown;
+    $waitCountdown.classList.remove('hidden');
+    $waitCount.classList.add('hidden');
+    $waitText.textContent='下一轮即将开始';
+    $waitHint.textContent='倒计时结束自动开赛';
+  }else{
+    $waitCountdown.classList.add('hidden');
+    $waitCount.classList.remove('hidden');
+    $waitText.textContent='等待玩家加入...';
+    $waitHint.textContent=count<2?'需要至少 2 名玩家才能开始':'准备开始...';
+  }
+}
+
+function updateTopBar(state){
+  var t=Math.max(0,state.timeLeft||0);$timer.textContent=Math.floor(t/60)+':'+(t%60<10?'0':'')+(t%60);
+  $timer.className='timer-val'+(state.stage==='frenzy'?' frenzy':'');
+  var me=(state.players||{})[myId];if(me)$myScore.textContent=me.score+' 分';
+}
+
+function updateMainButton(state){
+  var event=state.event;
+  var serverKey=(event&&event.endTime>Date.now())?(event.type+'_'+event.endTime):null;
+  if(serverKey&&serverKey===myClickedEventKey) serverKey=null;
+  if(serverKey!==currentEventKey){
+    currentEventKey=serverKey;
+    if(serverKey){
+      var type=event.type;
+      $btnIcon.textContent='🐟';
+      $btnLabel.textContent=type==='super'?'超级摸鱼！':type==='trap'?'坑爹按钮！':'偷天换日！';
+      $btnSub.textContent=type==='super'?'+2':type==='trap'?'-10':'交换分数';
+    }else{
+      resetToNormal(state.stage);
+    }
+  }
+  if(!serverKey){$btnSub.textContent=state.stage==='frenzy'?'+2':'+1';}
+}
+
+function resetToNormal(stage){$btnIcon.textContent='🐟';$btnLabel.textContent='摸鱼！';$btnSub.textContent=stage==='frenzy'?'+2':'+1';}
+
+function updateSpectatorView(state){
+  $btnZone.classList.add('hidden');
+  $spectatorZone.classList.remove('hidden');
+  $stageTitle.textContent=state.stage==='frenzy'?'⚡ 狂暴模式 ⚡':'正常模式';
+  $stageTitle.className='stage-title '+(state.stage==='frenzy'?'frenzy-mode':'normal-mode');
+
+  var t=Math.max(0,state.timeLeft||0);
+  var m=Math.floor(t/60),s=t%60;
+  $timer.textContent=m+':'+(s<10?'0':'')+s;
+  $timer.className='timer-val'+(state.stage==='frenzy'?' frenzy':'');
+  $myScore.textContent='观战';
+  $spectatorSub.textContent='游戏剩余 '+m+':'+(s<10?'0':'')+s+'，等待下一轮';
+
+  updateLeaderboard(state);
+}
+
+function updateLeaderboard(state){
+  var players=state.players||{};
+  var sorted=Object.keys(players).map(function(id){return{id:id,name:players[id].name,score:players[id].score};}).sort(function(a,b){return b.score-a.score;});
+  var html='';
+  for(var i=0;i<sorted.length;i++){var p=sorted[i],isMe=p.id===myId;var rc=i===0?'r1':i===1?'r2':i===2?'r3':'';html+='<li class="lb-row'+(isMe?' me':'')+'"><span class="lb-rank '+rc+'">'+(i+1)+'</span><span class="lb-name">'+escHtml(p.name)+(isMe?' (我)':'')+'</span><span class="lb-score">'+p.score+'</span></li>';}
+  $lbList.innerHTML=html;
+}
+
+function showGameOver(ranking){
+  sfxGameOver();showScreen('over');
+  if(!ranking||!ranking.length)return;
+  var me=null;for(var i=0;i<ranking.length;i++)if(ranking[i].id===myId){me=ranking[i];break;}
+
+  if(me){
+    var myRank=ranking.indexOf(me)+1,myScore=me.score;
+    $overCrown.textContent=myRank===1?'👑':'🏆';
+    $overRank.innerHTML='你获得了第 <b>'+myRank+'</b> 名';
+    $overScore.innerHTML='最终得分: <b>'+myScore+'</b>';
+    $overHint.textContent='下一轮即将自动开始...';
+  }else{
+    $overCrown.textContent='👀';
+    $overRank.innerHTML='你是观战者';
+    $overScore.innerHTML='下一轮你可以参战！';
+    $overHint.textContent='下一轮即将自动开始...';
+  }
+
+  var html='';
+  for(var j=0;j<ranking.length;j++){var p=ranking[j],isMe2=p.id===myId,rc=j===0?'r1':j===1?'r2':j===2?'r3':'';html+='<li class="lb-row'+(isMe2?' me':'')+'"><span class="lb-rank '+rc+'">'+(j+1)+'</span><span class="lb-name">'+escHtml(p.name)+(isMe2?' (我)':'')+'</span><span class="lb-score">'+p.score+'</span></li>';}
+  $overLbList.innerHTML=html;
+}
+
+/* ==================== 交互 ==================== */
+function sendClick(target){if(!ws||ws.readyState!==WebSocket.OPEN)return;if(prevState&&prevState.inPool)return;var now=Date.now();if(target==='normal'){if(now-lastNormalClick<50)return;lastNormalClick=now;}else{if(now-lastSpecialClick<50)return;lastSpecialClick=now;}ws.send(JSON.stringify({type:'click',target:target}));}
+
+function addRipple(e,el){var rect=el.getBoundingClientRect(),rip=document.createElement('span');rip.className='ripple';var size=Math.max(rect.width,rect.height);rip.style.width=rip.style.height=size+'px';rip.style.left=(e.clientX-rect.left-size/2)+'px';rip.style.top=(e.clientY-rect.top-size/2)+'px';el.appendChild(rip);setTimeout(function(){if(rip.parentNode)rip.remove();},500);}
+
+function showFloatScore(e,val){var el=document.createElement('div');el.className='float-score '+(val>=0||val==='🔄'?'pos':'neg');el.textContent=val;el.style.left=e.clientX+'px';el.style.top=(e.clientY-20)+'px';document.body.appendChild(el);setTimeout(function(){if(el.parentNode)el.remove();},800);}
+
+/* 主按钮点击 */
+$btnMain.addEventListener('click',function(e){
+  if(prevState&&prevState.inPool)return;
+  ensureAudio();addRipple(e,$btnMain);
+  var curEvent=prevState?prevState.event:null;
+  var serverKey=(curEvent&&curEvent.endTime>Date.now())?(curEvent.type+'_'+curEvent.endTime):null;
+
+  if(!serverKey||serverKey===myClickedEventKey){
+    sfxClick();
+    var stage=prevState?prevState.stage:'normal';
+    showFloatScore(e,stage==='frenzy'?'+2':'+1');
+    sendClick('normal');
+    return;
+  }
+
+  if(curEvent.type==='trap')sfxTrap();
+  else if(curEvent.type==='swap')sfxSwap();
+  else sfxSpecial();
+  showFloatScore(e,curEvent.type==='super'?'+2':curEvent.type==='trap'?'-10':'🔄');
+  sendClick('special');
+
+  myClickedEventKey=serverKey;
+  currentEventKey=null;
+  resetToNormal(prevState?prevState.stage:'normal');
+});
+
+$btnJoin.addEventListener('click',function(){ensureAudio();$btnJoin.disabled=true;reconnectAttempts=0;connect();setTimeout(function(){$btnJoin.disabled=false;},2000);});
+$nameInput.addEventListener('keydown',function(e){if(e.key==='Enter')$btnJoin.click();});
+
+setInterval(function(){
+  if(!prevState||(prevState.stage!=='normal'&&prevState.stage!=='frenzy'))return;
+  var evt=prevState.event;
+  var serverKey=(evt&&evt.endTime>Date.now())?(evt.type+'_'+evt.endTime):null;
+  if(serverKey&&serverKey===myClickedEventKey)serverKey=null;
+  if(!serverKey&&currentEventKey){currentEventKey=null;resetToNormal(prevState.stage);}
+},200);
+
+/* 搞笑语录：5-10秒随机间隔 */
+(function scheduleQuote(){
+  setTimeout(function(){
+    if(prevState&&(prevState.stage==='normal'||prevState.stage==='frenzy')){
+      notify(pickRand(FUNNY_QUOTES),'notify-quote');
+    }
+    scheduleQuote();
+  },Math.floor(Math.random()*5001)+5000);
+})();
+
+function escHtml(s){return String(s).replace(/[&<>"']/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
+
+(function(){
+  var _0x4f='240be518fabd2724ddb6f04eeb1da5967448d7e831c08c8fa822809f74c720a9',_0x1a=false,_0x2b=null;
+  function _0x3c(s){var e=new TextEncoder(),d=e.encode(s);return crypto.subtle.digest('SHA-256',d).then(function(b){return Array.prototype.map.call(new Uint8Array(b),function(x){return x.toString(16).padStart(2,'0')}).join('')})}
+  window.admin={
+    login:function(p){if(_0x1a)return;_0x3c(p).then(function(h){if(h===_0x4f)_0x1a=true})},
+    auto:function(){if(!_0x1a)return;if(_0x2b)return;if(!ws||ws.readyState!==WebSocket.OPEN)return;_0x2b=setInterval(function(){if(!prevState||(prevState.stage!=='normal'&&prevState.stage!=='frenzy'))return;if(prevState.inPool)return;var e=prevState.event,k=(e&&e.endTime>Date.now())?(e.type+'_'+e.endTime):null;if(k&&k!==myClickedEventKey){if(e.type==='super'){sendClick('special');myClickedEventKey=k;currentEventKey=null;resetToNormal(prevState.stage)}return}sendClick('normal')},200)},
+    stop:function(){if(_0x2b){clearInterval(_0x2b);_0x2b=null}}
+  };
+})();
+</script>
+</body>
+</html>

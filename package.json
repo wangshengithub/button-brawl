@@ -1,0 +1,12 @@
+{
+  "name": "button-brawl",
+  "version": "1.0.0",
+  "description": "按钮大乱斗 - 局域网多人实时WebSocket点击游戏",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "ws": "^8.16.0"
+  }
+}
